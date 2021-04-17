@@ -33,7 +33,7 @@ copykat <- function(rawmat = rawdata,
                     KS.cut = 0.1,
                     sam.name = "",
                     distance = "euclidean",
-                    n.cores=1){
+                    n.cores=4){
   maxChr = c("hg20" = 23, "mm10" = 21)
   start_time <- Sys.time()
   set.seed(1)
@@ -148,11 +148,14 @@ copykat <- function(rawmat = rawdata,
   print("step 4: measuring baselines ...")
   if (cell.line=="yes"){
   	print("running pure cell line mode")
-  	    relt <- baseline.synthetic(norm.mat=norm.mat.smooth, min.cells=10, n.cores=n.cores)
+  	relt <-
+  	  baseline.synthetic(norm.mat = norm.mat.smooth,
+  	                     min.cells = 10,
+  	                     n.cores = n.cores)
 		norm.mat.relat <- relt$expr.relat
 		CL <- relt$cl
-        WNS <- "run with cell line mode"
-    	preN <- NULL
+    WNS <- "run with cell line mode"
+    preN <- NULL
 
   } else if(length(norm.cell.names)>1){
 
