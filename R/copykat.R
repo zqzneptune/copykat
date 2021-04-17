@@ -1,8 +1,8 @@
 #' copycat main_func.
 #'
 #' @param rawmat raw data matrix; genes in rows; cell names in columns.
-#' @param  id.type gene id type: Symbol or Ensemble.
-#' @param  cell.line if the data are from pure cell line,put "yes"; if cellline data are a mixture of tumor and normal cells, still put "no".
+#' @param id.type gene id type: Symbol or Ensemble.
+#' @param cell.line if the data are from pure cell line,put "yes"; if cellline data are a mixture of tumor and normal cells, still put "no".
 #' @param LOW.DR minimal population fractoins of genes for smoothing.
 #' @param UP.DR minimal population fractoins of genes for segmentation.
 #' @param win.size minimal window sizes for segmentation.
@@ -21,66 +21,103 @@
 #' @export
 
 
-copykat <- function(rawmat=rawdata, id.type="S", cell.line="no", ngene.chr=5,LOW.DR=0.05, UP.DR=0.1, win.size=25, norm.cell.names="", KS.cut=0.1, sam.name="", distance="euclidean", n.cores=1){
+copykat <- function(rawmat = rawdata,
+                    genome = "hg20",
+                    id.type = "S",
+                    cell.line = "no",
+                    ngene.chr = 1,
+                    LOW.DR = 0.05,
+                    UP.DR = 0.1,
+                    win.size = 25,
+                    norm.cell.names = "",
+                    KS.cut = 0.1,
+                    sam.name = "",
+                    distance = "euclidean",
+                    n.cores=1){
+  maxChr = c("hg20" = 23, "mm10" = 21)
   start_time <- Sys.time()
   set.seed(1)
-  sample.name <- paste(sam.name,"_copykat_", sep="")
+  sample.name <-
+    paste0(sam.name, "_copykat_")
 
   print("running copykat v1.0.4")
   print("step1: read and filter data ...")
-  print(paste(nrow(rawmat), " genes, ", ncol(rawmat), " cells in raw data", sep=""))
+  print(paste0(nrow(rawmat), " genes, ", ncol(rawmat), " cells in raw data"))
 
-  genes.raw <- apply(rawmat, 2, function(x)(sum(x>0)))
+  genes.raw <-
+    apply(rawmat, 2, function(x){
+      sum(x > 0)
+    })
 
-  if(sum(genes.raw> 200)==0) stop("none cells have more than 200 genes")
+  if(sum(genes.raw > 200) == 0){
+    stop("none cells have more than 200 genes")
+  }
+
   if(sum(genes.raw<100)>1){
-    rawmat <- rawmat[, -which(genes.raw< 200)]
-    print(paste("filtered out ", sum(genes.raw<=200), " cells with less than 200 genes; remaining ", ncol(rawmat), " cells", sep=""))
+    rawmat <- rawmat[, -which(genes.raw < 200)]
+    print(paste0("filtered out ", sum(genes.raw <= 200),
+                " cells with less than 200 genes; remaining ",
+                ncol(rawmat), " cells"))
   }
   ##
-  der<- apply(rawmat,1,function(x)(sum(x>0)))/ncol(rawmat)
+  der<- apply(rawmat, 1,function(x)(sum(x>0)))/ncol(rawmat)
 
   if(sum(der>LOW.DR)>=1){
-    rawmat <- rawmat[which(der > LOW.DR), ]; print(paste(nrow(rawmat)," genes past LOW.DR filtering", sep=""))
+    rawmat <- rawmat[which(der > LOW.DR), ]
+    print(paste0(nrow(rawmat)," genes past LOW.DR filtering"))
   }
 
   WNS1 <- "data quality is ok"
   if(nrow(rawmat) < 7000){
     WNS1 <- "low data quality"
-    UP.DR<- LOW.DR
+    UP.DR <- LOW.DR
     print("WARNING: low data quality; assigned LOW.DR to UP.DR...")
   }
 
   print("step 2: annotations gene coordinates ...")
-  anno.mat <- annotateGenes.hg20(mat = rawmat, ID.type = id.type) #SYMBOL or ENSEMBLE
-  anno.mat <- anno.mat[order(anno.mat$abspos, decreasing = FALSE),]
+  if(genome == "mm10"){
+    anno.mat <- annotateGenes.mm10(mat = rawmat, ID.type = id.type) #SYMBOL or ENSEMBLE
+  }else{
+    anno.mat <- annotateGenes.hg20(mat = rawmat, ID.type = id.type) #SYMBOL or ENSEMBLE
+  }
+
+  anno.mat <- anno.mat[order(anno.mat$abspos, decreasing = FALSE), ]
 
 # print(paste(nrow(anno.mat)," genes annotated", sep=""))
 
   ### module 3 removing genes that are involved in cell cycling
-  HLAs <- anno.mat$hgnc_symbol[grep("^HLA-", anno.mat$hgnc_symbol)]
-  toRev <- which(anno.mat$hgnc_symbol %in% c(as.vector(cyclegenes[[1]]), HLAs))
+  HLAs <-
+    anno.mat$gene_symbol[grep("^HLA-", anno.mat$gene_symbol, ignore.case = TRUE)]
+  if(genome == "mm10"){
+    toRev <- which(anno.mat$gene_symbol %in% c(as.vector(cyclegenes.mm10[[1]]), HLAs))
+  }else{
+    toRev <- which(anno.mat$gene_symbol %in% c(as.vector(cyclegenes.hg20[[1]]), HLAs))
+  }
+
   if(length(toRev)>0){
     anno.mat <- anno.mat[-toRev, ]
   }
 
-#  print(paste(nrow(anno.mat)," genes after rm cell cycle genes", sep=""))
+#  print(paste(nrow(anno.mat)," genes after rmC cell cycle genes", sep=""))
   ### secondary filtering
   ToRemov2 <- NULL
   for(i in 8:ncol(anno.mat)){
-    cell <- cbind(anno.mat$chromosome_name, anno.mat[,i])
-    cell <- cell[cell[,2]!=0,]
-    if(length(as.numeric(cell))< 5){
-      rm <- colnames(anno.mat)[i]
-      ToRemov2 <- c(ToRemov2, rm)
-    } else if(length(rle(cell[,1])$length)<23|min(rle(cell[,1])$length)< ngene.chr){
-      rm <- colnames(anno.mat)[i]
-      ToRemov2 <- c(ToRemov2, rm)
+    cell <-
+      cbind(anno.mat$chromosome_name, anno.mat[,i])
+    cell <-
+      cell[cell[,2] != 0, ]
+    if(length(as.numeric(cell)) < 5){
+      rmC <- colnames(anno.mat)[i]
+      ToRemov2 <- c(ToRemov2, rmC)
+    } else if(length(rle(cell[,1])$length)<maxChr[genome]|min(rle(cell[,1])$length) < ngene.chr){
+      rmC <- colnames(anno.mat)[i]
+      ToRemov2 <- c(ToRemov2, rmC)
     }
-    i<- i+1
   }
 
-  if(length(ToRemov2)==(ncol(anno.mat)-7)) stop("all cells are filtered")
+  if(length(ToRemov2)==(ncol(anno.mat)-7)){
+    stop("all cells are filtered")
+  }
 
   if(length(ToRemov2)>0){
     anno.mat <-anno.mat[, -which(colnames(anno.mat) %in% ToRemov2)]
@@ -189,11 +226,11 @@ copykat <- function(rawmat=rawdata, id.type="S", cell.line="no", ngene.chr=5,LOW
     cell <- cbind(anno.mat2$chromosome_name, anno.mat2[,i])
     cell <- cell[cell[,2]!=0,]
     if(length(as.numeric(cell))< 5){
-      rm <- colnames(anno.mat2)[i]
-      ToRemov3 <- c(ToRemov3, rm)
+      rmC <- colnames(anno.mat2)[i]
+      ToRemov3 <- c(ToRemov3, rmC)
     } else if(length(rle(cell[,1])$length)<23|min(rle(cell[,1])$length)< ngene.chr){
-      rm <- colnames(anno.mat2)[i]
-      ToRemov3 <- c(ToRemov3, rm)
+      rmC <- colnames(anno.mat2)[i]
+      ToRemov3 <- c(ToRemov3, rmC)
     }
     i<- i+1
   }
@@ -232,7 +269,12 @@ copykat <- function(rawmat=rawdata, id.type="S", cell.line="no", ngene.chr=5,LOW
   write.table(RNA.copycat, paste(sample.name, "CNA_raw_results_gene_by_cell.txt", sep=""), sep="\t", row.names = FALSE, quote = F)
 
   print("step 6: convert to genomic bins...") ###need multi-core
-  Aj <- convert.all.bins.hg20(DNA.mat = DNA.hg20, RNA.mat=RNA.copycat, n.cores = n.cores)
+  if(genome == "mm10"){
+    Aj <- convert.all.bins.mm10(DNA.mat = DNA.mm10, RNA.mat=RNA.copycat, n.cores = n.cores)
+  }else{
+    Aj <- convert.all.bins.hg20(DNA.mat = DNA.hg20, RNA.mat=RNA.copycat, n.cores = n.cores)
+  }
+
 
   uber.mat.adj <- data.matrix(Aj$RNA.adj[, 4:ncol(Aj$RNA.adj)])
 

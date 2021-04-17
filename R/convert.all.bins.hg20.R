@@ -2,7 +2,7 @@
 #'
 #' @param DNA.mat input target bins, provided by copycat, with 220KB windows.
 #' @param RNA.mat RNA data matrix with genes in rows.
-#' @param full.anno annotation file for all known genes, automatically loaded in copycat.
+#' @param full.anno.hg20 annotation file for all known genes, automatically loaded in copycat.
 #' @param n.cores number of cores for parallel computing.
 #'
 #' @return adjusted datamatrix with bins in rows, cells in columns.
@@ -19,9 +19,9 @@ convert.all.bins.hg20 <- function(DNA.mat, RNA.mat, n.cores){
          start <- c(0, end[-length(end)])
           ls.all <- list()
           for(i in 1:nrow(DNA)){
-          sub.anno <- full.anno[which(full.anno$chromosome_name==DNA$chrom[i]),]
+          sub.anno <- full.anno.hg20[which(full.anno.hg20$chromosome_name==DNA$chrom[i]),]
           cent.gene <- 0.5*(sub.anno$start_position+sub.anno$end_position)
-          x <- sub.anno$hgnc_symbol[which(cent.gene<=end[i] & cent.gene>= start[i])]
+          x <- sub.anno$gene_symbol[which(cent.gene<=end[i] & cent.gene>= start[i])]
           if(length(x)==0){x <- "NA"}
           ls.all[[i]] <- x
           i<- i+1
@@ -32,9 +32,9 @@ convert.all.bins.hg20 <- function(DNA.mat, RNA.mat, n.cores){
 
          ###adj
           R.ADJ <- function(i){
-            shr <- intersect(ls.all[[i]], RNA.mat$hgnc_symbol)
+            shr <- intersect(ls.all[[i]], RNA.mat$gene_symbol)
             if(length(shr)>0){
-              Aj <- apply(RNA[which(RNA.mat$hgnc_symbol %in% shr), ], 2, median)
+              Aj <- apply(RNA[which(RNA.mat$gene_symbol %in% shr), ], 2, median)
             }
 
           }
