@@ -231,11 +231,10 @@ copykat <- function(rawmat = rawdata,
     if(length(as.numeric(cell))< 5){
       rmC <- colnames(anno.mat2)[i]
       ToRemov3 <- c(ToRemov3, rmC)
-    } else if(length(rle(cell[,1])$length)<23|min(rle(cell[,1])$length)< ngene.chr){
+    } else if(length(rle(cell[,1])$length)<maxChr[genome]|min(rle(cell[,1])$length)< ngene.chr){
       rmC <- colnames(anno.mat2)[i]
       ToRemov3 <- c(ToRemov3, rmC)
     }
-    i<- i+1
   }
 
   if(length(ToRemov3)==ncol(norm.mat.relat)) stop ("all cells are filtered")
